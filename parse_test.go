@@ -1,6 +1,7 @@
 package proxyproto
 
 import (
+	"bytes"
 	"net"
 	"reflect"
 	"testing"
@@ -8,15 +9,16 @@ import (
 
 func Test_parse(t *testing.T) {
 	tests := []struct {
-		name string
-		buf  []byte
-		want *Data
+		name    string
+		buf     []byte
+		want    *Data
+		wantErr error
 	}{
 		{
 			name: "valid 4",
 			buf:  []byte("PROXY TCP4 10.20.30.40 40.30.20.10 8000 9000\r\nTEST"),
 			want: &Data{
-				DataOffset:    46,
+				remainingData: []byte("TEST"),
 				AddressFamily: AddressFamilyIPv4,
 				Transport:     TransportStream,
 				SourceAddr:    net.IPv4(10, 20, 30, 40),
@@ -29,7 +31,7 @@ func Test_parse(t *testing.T) {
 			name: "valid 6",
 			buf:  []byte("PROXY TCP6 2607:f8b0:4008:80e::200e 2606:4700:4700::1111 8000 9000\r\nTEST"),
 			want: &Data{
-				DataOffset:    68,
+				remainingData: []byte("TEST"),
 				AddressFamily: AddressFamilyIPv6,
 				Transport:     TransportStream,
 				SourceAddr:    []byte{0x26, 0x7, 0xf8, 0xb0, 0x40, 0x8, 0x8, 0xe, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0e},
@@ -62,7 +64,7 @@ func Test_parse(t *testing.T) {
 				0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
 			},
 			want: &Data{
-				DataOffset:    28,
+				remainingData: []byte{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8},
 				AddressFamily: AddressFamilyIPv4,
 				Transport:     TransportStream,
 				SourceAddr:    []byte{10, 20, 30, 40},
@@ -104,7 +106,7 @@ func Test_parse(t *testing.T) {
 				0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
 			},
 			want: &Data{
-				DataOffset:    38,
+				remainingData: []byte{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8},
 				AddressFamily: AddressFamilyIPv4,
 				Transport:     TransportStream,
 				SourceAddr:    []byte{10, 20, 30, 40},
@@ -141,7 +143,7 @@ func Test_parse(t *testing.T) {
 				0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
 			},
 			want: &Data{
-				DataOffset:    52,
+				remainingData: []byte{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8},
 				AddressFamily: AddressFamilyIPv6,
 				Transport:     TransportStream,
 				SourceAddr:    []byte{0x26, 0x7, 0xf8, 0xb0, 0x40, 0x8, 0x8, 0xe, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x20, 0x0e},
@@ -166,7 +168,7 @@ func Test_parse(t *testing.T) {
 				0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
 			},
 			want: &Data{
-				DataOffset:    16,
+				remainingData: []byte{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8},
 				AddressFamily: AddressFamilyLocal,
 				Transport:     TransportUnspec,
 			},
@@ -174,10 +176,13 @@ func Test_parse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Parse(tt.buf)
+			got, err := Parse(bytes.NewBuffer(tt.buf))
 
+			if tt.wantErr != err {
+				t.Fatalf("Parse() err = %v, want %v", err, tt.wantErr)
+			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("parse() = %v, want %v", got, tt.want)
+				t.Fatalf("Parse() = %v, want %v", got, tt.want)
 			}
 		})
 	}

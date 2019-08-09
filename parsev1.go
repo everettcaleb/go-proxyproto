@@ -1,66 +1,34 @@
 package proxyproto
 
 import (
+	"bytes"
 	"net"
 	"strconv"
 )
 
-// ParseV1 takes raw packet data and attempts to parse Proxy Protocol v1 ONLY
-// if the data does not match Proxy Protocol v1 or uses unknown
-// this function returns nil. TLVs will always be nil. You can safely cast the
-// SourceAddr and DestAddr to the Go built-in net.IP type.
-// Note: doesn't check the first char since typically Parse() checks that
-// The first char is expected to be 'P'
-func ParseV1(buf []byte) *Data {
-	// PROXY
-	if buf[1] != protov1[1] {
-		return nil
+func parseV1(c []byte) (*Data, error) {
+	switch {
+	case bytes.HasPrefix(c, inetProtoTCP4[:]):
+		return parseV1TCP(c[len(inetProtoTCP4):], AddressFamilyIPv4, v1Tcp4MaxSize)
+	case bytes.HasPrefix(c, inetProtoTCP6[:]):
+		return parseV1TCP(c[len(inetProtoTCP6):], AddressFamilyIPv6, v1BufSize)
+	case bytes.HasPrefix(c, inetProtoUnknown[:]):
+		c = c[len(inetProtoUnknown):]
+		crlf := bytes.Index(c, lineCrLf[:])
+		if crlf < 0 {
+			return nil, ParseError("failed to parse proxy protocol v1: expected CR/LF in buffer")
+		}
+		return &Data{
+			remainingData: c[len(inetProtoUnknown)+crlf:],
+		}, nil
+	default:
+		return nil, ParseError("failed to parse proxy protocol v1: expected \"TCP4\", \"TCP6\", or \"UNKNOWN\" after \"PROXY\"")
 	}
-	if buf[2] != protov1[2] {
-		return nil
-	}
-	if buf[3] != protov1[3] {
-		return nil
-	}
-	if buf[4] != protov1[4] {
-		return nil
-	}
-	// " "
-	if buf[5] != 0x20 {
-		return nil
-	}
-	// TCP
-	if buf[6] != inetProtoTCP4[0] {
-		return nil
-	}
-	if buf[7] != inetProtoTCP4[1] {
-		return nil
-	}
-	if buf[8] != inetProtoTCP4[2] {
-		return nil
-	}
-	// 4, 6
-	switch buf[9] {
-	case inetProtoTCP4[3]: // "4"
-		return parseV1TCP(buf, AddressFamilyIPv4, v1Tcp4MaxSize)
-	case inetProtoTCP6[3]: // "6"
-		return parseV1TCP(buf, AddressFamilyIPv6, v1BufSize)
-	}
-
-	return nil
 }
 
-// processes Proxy Protocol V1 for TCP only
-// note: skip the first 10 characters ("PROXY TCP#")
-// since those are checked by processV1
-func parseV1TCP(buf []byte, af AddressFamily, maxSize int) *Data {
-	// " "
-	if buf[10] != 0x20 {
-		return nil
-	}
-
+func parseV1TCP(buf []byte, af AddressFamily, maxSize int) (*Data, error) {
 	// read until next space for source IP
-	srcIPStart := 11
+	srcIPStart := 0
 	srcIPEnd := srcIPStart // this will be the space after the source IP
 	for i := srcIPStart; i < len(buf) && i < maxSize; i++ {
 		if buf[i] == 0x20 {
@@ -69,7 +37,7 @@ func parseV1TCP(buf []byte, af AddressFamily, maxSize int) *Data {
 		}
 	}
 	if srcIPStart == srcIPEnd {
-		return nil
+		return nil, ParseError("failed to parse proxy protocol v1: expected space after source IP")
 	}
 
 	// read until next space for dest IP
@@ -82,7 +50,7 @@ func parseV1TCP(buf []byte, af AddressFamily, maxSize int) *Data {
 		}
 	}
 	if destIPStart == destIPEnd {
-		return nil
+		return nil, ParseError("failed to parse proxy protocol v1: expected space after dest IP")
 	}
 
 	// read until next space for source port
@@ -95,7 +63,7 @@ func parseV1TCP(buf []byte, af AddressFamily, maxSize int) *Data {
 		}
 	}
 	if srcPortStart == srcPortEnd {
-		return nil
+		return nil, ParseError("failed to parse proxy protocol v1: expected space after source port")
 	}
 
 	// read until CR for dest port
@@ -108,47 +76,45 @@ func parseV1TCP(buf []byte, af AddressFamily, maxSize int) *Data {
 		}
 	}
 	if destPortStart == destPortEnd {
-		return nil
+		return nil, ParseError("failed to parse proxy protocol v1: expected CR after dest port")
 	}
 
 	// check LF
 	if buf[destPortEnd+1] != 0x0A {
-		return nil
+		return nil, ParseError("failed to parse proxy protocol v1: expected LF after CR")
 	}
 
 	// parse source IP
-	sipstr := string(buf[srcIPStart:srcIPEnd])
-	sip := net.ParseIP(sipstr)
+	sip := net.ParseIP(string(buf[srcIPStart:srcIPEnd]))
 	if sip == nil {
-		return nil
+		return nil, fmtParseError("failed to parse proxy protocol v1: failed to parse source IP %q", string(buf[srcIPStart:srcIPEnd]))
 	}
 
 	// parse dest IP
 	dip := net.ParseIP(string(buf[destIPStart:destIPEnd]))
 	if dip == nil {
-		return nil
+		return nil, fmtParseError("failed to parse proxy protocol v1: failed to parse dest IP %q", string(buf[destIPStart:destIPEnd]))
 	}
 
 	// parse source port
 	sp, err := strconv.Atoi(string(buf[srcPortStart:srcPortEnd]))
 	if err != nil {
-		return nil
+		return nil, fmtParseError("failed to parse proxy protocol v1: failed to parse source port %q: %v", string(buf[srcPortStart:srcPortEnd]), err)
 	}
 
 	// parse dest port
 	dp, err := strconv.Atoi(string(buf[destPortStart:destPortEnd]))
 	if err != nil {
-		return nil
+		return nil, fmtParseError("failed to parse proxy protocol v1: failed to parse dest port %q: %v", string(buf[destPortStart:destPortEnd]), err)
 	}
 
-	// return the index of the first byte that is not part of proxy protocol
 	return &Data{
 		AddressFamily: af,
 		Transport:     TransportStream,
-		DataOffset:    destPortEnd + 2,
+		remainingData: buf[destPortEnd+2:],
 		SourceAddr:    []byte(sip),
 		DestAddr:      []byte(dip),
 		SourcePort:    sp,
 		DestPort:      dp,
-	}
+	}, nil
 }

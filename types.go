@@ -1,5 +1,11 @@
 package proxyproto
 
+import (
+	"net"
+	"strconv"
+	"strings"
+)
+
 const (
 	// 108 bytes is the ideal buffer size for proxy proto v1
 	v1BufSize = 108
@@ -30,12 +36,16 @@ const (
 )
 
 var (
-	// value is "PROXY"
-	protov1 = [5]byte{0x50, 0x52, 0x4F, 0x58, 0x59}
-	// value is "TCP4"
-	inetProtoTCP4 = [4]byte{0x54, 0x43, 0x50, 0x34}
-	// value is "TCP6"
-	inetProtoTCP6 = [4]byte{0x54, 0x43, 0x50, 0x36}
+	// value is "PROXY "
+	protov1 = [6]byte{0x50, 0x52, 0x4F, 0x58, 0x59, 0x20}
+	// value is "TCP4 "
+	inetProtoTCP4 = [5]byte{0x54, 0x43, 0x50, 0x34, 0x20}
+	// value is "TCP6 "
+	inetProtoTCP6 = [5]byte{0x54, 0x43, 0x50, 0x36, 0x20}
+	// value is "UNKNOWN"
+	inetProtoUnknown = [8]byte{0x55, 0x4E, 0x4B, 0x4E, 0x4F, 0x57, 0x4E}
+	// value is "\r\n"
+	lineCrLf = [2]byte{0x0D, 0x0A}
 
 	// value is binary for best performance
 	protov2 = [12]byte{0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D, 0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A}
@@ -80,10 +90,76 @@ type TLVType byte
 type Data struct {
 	AddressFamily AddressFamily
 	Transport     Transport
-	DataOffset    int
 	SourceAddr    []byte
 	DestAddr      []byte
 	SourcePort    int
 	DestPort      int
 	TLVs          map[TLVType][]byte
+	remainingData []byte
+}
+
+// Source gets the source as a net.Addr
+func (d *Data) Source() net.Addr {
+	return &dataAddr{
+		AddressFamily: d.AddressFamily,
+		Transport:     d.Transport,
+		Addr:          d.SourceAddr,
+		Port:          d.SourcePort,
+	}
+}
+
+// Dest gets the destination as a net.Addr
+func (d *Data) Dest() net.Addr {
+	return &dataAddr{
+		AddressFamily: d.AddressFamily,
+		Transport:     d.Transport,
+		Addr:          d.DestAddr,
+		Port:          d.DestPort,
+	}
+}
+
+type dataAddr struct {
+	AddressFamily AddressFamily
+	Transport     Transport
+	Addr          []byte
+	Port          int
+}
+
+func (a *dataAddr) Network() string {
+	if a.Transport == TransportStream {
+		if a.AddressFamily == AddressFamilyIPv4 {
+			return "tcp4"
+		}
+		if a.AddressFamily == AddressFamilyIPv6 {
+			return "tcp6"
+		}
+		if a.AddressFamily == AddressFamilyUnix {
+			return "unix"
+		}
+	}
+	if a.Transport == TransportDgram {
+		if a.AddressFamily == AddressFamilyIPv4 {
+			return "udp4"
+		}
+		if a.AddressFamily == AddressFamilyIPv6 {
+			return "udp6"
+		}
+		if a.AddressFamily == AddressFamilyUnix {
+			return "unixpacket"
+		}
+	}
+	return ""
+}
+
+func (a *dataAddr) String() string {
+	if a.AddressFamily == AddressFamilyIPv4 || a.AddressFamily == AddressFamilyIPv6 {
+		return strings.Join([]string{
+			net.IP(a.Addr).String(),
+			strconv.Itoa(a.Port),
+		}, ":")
+	}
+	if a.AddressFamily == AddressFamilyUnix {
+		return string(a.Addr)
+	}
+	return ""
 }
