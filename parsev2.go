@@ -58,6 +58,7 @@ func parseV2(buf []byte, r io.Reader) (*Data, error) {
 	var tr Transport
 	switch aftp & 0xf {
 	case afpLowerUnspec:
+		tr = TransportUnspec
 	case afpLowerStream:
 		tr = TransportStream
 	case afpLowerDgram:

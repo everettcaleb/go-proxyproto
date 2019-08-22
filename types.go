@@ -22,17 +22,21 @@ const (
 	TransportStream Transport = 1
 	TransportDgram  Transport = 2
 
-	TLVTypeALPN          TLVType = 0x1
-	TLVTypeAuthority     TLVType = 0x2
-	TLVTypeCRC32C        TLVType = 0x3
-	TLVTypeNoop          TLVType = 0x4
-	TLVTypeSSL           TLVType = 0x20
-	TLVSubTypeSSLVersion TLVType = 0x21
-	TLVSubTypeSSLCN      TLVType = 0x22
-	TLVSubTypeSSLCipher  TLVType = 0x23
-	TLVSubTypeSSLSigAlg  TLVType = 0x24
-	TLVSubTypeSSLKeyAlg  TLVType = 0x25
-	TLVTypeNetNS         TLVType = 0x30
+	TLVTypeALPN          TLVType       = 0x1
+	TLVTypeAuthority     TLVType       = 0x2
+	TLVTypeCRC32C        TLVType       = 0x3
+	TLVTypeNoop          TLVType       = 0x4
+	TLVTypeSSL           TLVType       = 0x20
+	TLVSubTypeSSLVersion SSLTLVSubType = 0x21
+	TLVSubTypeSSLCN      SSLTLVSubType = 0x22
+	TLVSubTypeSSLCipher  SSLTLVSubType = 0x23
+	TLVSubTypeSSLSigAlg  SSLTLVSubType = 0x24
+	TLVSubTypeSSLKeyAlg  SSLTLVSubType = 0x25
+	TLVTypeNetNS         TLVType       = 0x30
+
+	TLVSSLClientSSL      SSLTLVClientField = 0x1
+	TLVSSLClientCertConn SSLTLVClientField = 0x2
+	TLVSSLClientCertSess SSLTLVClientField = 0x4
 )
 
 var (
@@ -85,6 +89,10 @@ type Transport int
 
 // TLVType is the "type" portion of type-length-value
 type TLVType byte
+
+type SSLTLVSubType byte
+
+type SSLTLVClientField byte
 
 // Data represents the version independent data captured via Proxy Protocol
 type Data struct {
@@ -162,4 +170,60 @@ func (a *dataAddr) String() string {
 		return string(a.Addr)
 	}
 	return ""
+}
+
+type SSLTLVData struct {
+	Client   SSLTLVClientField
+	Verified bool
+	SubTLVs  map[SSLTLVSubType][]byte
+}
+
+func (d *SSLTLVData) TLVSSLVersion() (string, bool) {
+	if d.SubTLVs == nil {
+		return "", false
+	}
+	if d, ok := d.SubTLVs[TLVSubTypeSSLVersion]; ok {
+		return string(d), true
+	}
+	return "", false
+}
+
+func (d *SSLTLVData) TLVSSLCommonName() (string, bool) {
+	if d.SubTLVs == nil {
+		return "", false
+	}
+	if d, ok := d.SubTLVs[TLVSubTypeSSLCN]; ok {
+		return string(d), true
+	}
+	return "", false
+}
+
+func (d *SSLTLVData) TLVSSLCipher() (string, bool) {
+	if d.SubTLVs == nil {
+		return "", false
+	}
+	if d, ok := d.SubTLVs[TLVSubTypeSSLCipher]; ok {
+		return string(d), true
+	}
+	return "", false
+}
+
+func (d *SSLTLVData) TLVSSLSigAlg() (string, bool) {
+	if d.SubTLVs == nil {
+		return "", false
+	}
+	if d, ok := d.SubTLVs[TLVSubTypeSSLSigAlg]; ok {
+		return string(d), true
+	}
+	return "", false
+}
+
+func (d *SSLTLVData) TLVSSLKeyAlg() (string, bool) {
+	if d.SubTLVs == nil {
+		return "", false
+	}
+	if d, ok := d.SubTLVs[TLVSubTypeSSLKeyAlg]; ok {
+		return string(d), true
+	}
+	return "", false
 }

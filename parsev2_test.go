@@ -149,6 +149,40 @@ func Test_parseV2(t *testing.T) {
 			},
 			wantErr: nil,
 		},
+		{
+			name: "ipv4 unspec",
+			buf: []byte{
+				// header
+				// 0x0D, 0x0A, 0x0D, 0x0A, 0x00, 0x0D, 0x0A, 0x51, 0x55, 0x49, 0x54, 0x0A,
+				// version/command
+				0x21,
+				// address family / transport
+				0x10,
+				// length
+				0x0, 0xc,
+				// source addr
+				10, 20, 30, 40,
+				// dest addr
+				40, 30, 20, 10,
+				// source port
+				0x1f, 0x40,
+				// dest port
+				0x23, 0x28,
+
+				// random data
+				0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
+			},
+			want: &Data{
+				remainingData: []byte{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8},
+				AddressFamily: AddressFamilyIPv4,
+				Transport:     TransportUnspec,
+				SourceAddr:    []byte{10, 20, 30, 40},
+				SourcePort:    8000,
+				DestAddr:      []byte{40, 30, 20, 10},
+				DestPort:      9000,
+			},
+			wantErr: nil,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

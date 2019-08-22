@@ -10,9 +10,9 @@ type Conn struct {
 	protoData *Data
 }
 
-// Wrap wraps the specified network connection in Proxy Protocol parsing logic.
+// WrapConn wraps the specified network connection in Proxy Protocol parsing logic.
 // The first bytes read from the connection will be used to populate the proxy data.
-func Wrap(conn net.Conn) *Conn {
+func WrapConn(conn net.Conn) *Conn {
 	return &Conn{conn: conn}
 }
 
