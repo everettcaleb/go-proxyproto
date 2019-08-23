@@ -1,6 +1,8 @@
 package proxyproto
 
-import "net"
+import (
+	"net"
+)
 
 type Listener struct {
 	listener net.Listener
@@ -15,7 +17,7 @@ func (l *Listener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return WrapConn(conn), nil
+	return WrapConn(conn)
 }
 
 func (l *Listener) Close() error {

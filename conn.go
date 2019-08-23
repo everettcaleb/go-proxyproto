@@ -12,8 +12,12 @@ type Conn struct {
 
 // WrapConn wraps the specified network connection in Proxy Protocol parsing logic.
 // The first bytes read from the connection will be used to populate the proxy data.
-func WrapConn(conn net.Conn) *Conn {
-	return &Conn{conn: conn}
+func WrapConn(conn net.Conn) (*Conn, error) {
+	d, err := Parse(conn)
+	if err != nil {
+		return nil, err
+	}
+	return &Conn{conn: conn, protoData: d}, nil
 }
 
 // ProxyData retrieves proxy data cached after initial read, may be nil if Read() hasn't
@@ -28,13 +32,6 @@ func (c *Conn) ProxyData() *Data {
 // Read can be made to time out and return an Error with Timeout() == true
 // after a fixed time limit; see SetDeadline and SetReadDeadline.
 func (c *Conn) Read(b []byte) (int, error) {
-	if c.protoData == nil {
-		d, err := Parse(c.conn)
-		if err != nil {
-			return 0, err
-		}
-		c.protoData = d
-	}
 	if c.protoData != nil && len(c.protoData.remainingData) > 0 {
 		n := len(c.protoData.remainingData)
 		bc := cap(b)
