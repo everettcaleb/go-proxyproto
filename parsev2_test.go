@@ -87,8 +87,8 @@ func Test_parseV2(t *testing.T) {
 				DestAddr:      []byte{40, 30, 20, 10},
 				DestPort:      9000,
 				TLVs: map[TLVType][]byte{
-					TLVTypeNoop:   []byte{},
-					TLVTypeCRC32C: []byte{1, 2, 3, 4},
+					TLVTypeNoop:   {},
+					TLVTypeCRC32C: {1, 2, 3, 4},
 				},
 			},
 			wantErr: nil,
