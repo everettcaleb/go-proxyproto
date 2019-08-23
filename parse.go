@@ -8,6 +8,8 @@ import (
 
 const parseReadSize = 4096
 
+// Parse takes an io.Reader and attempts to parse it as Proxy Protocol v1 or v2
+// If parsing fails, error will be a ParseError
 func Parse(r io.Reader) (*Data, error) {
 	buf := make([]byte, parseReadSize)
 	n, err := r.Read(buf)
@@ -30,6 +32,7 @@ func Parse(r io.Reader) (*Data, error) {
 	}
 }
 
+// ParseError is a type of error for parsing errors
 type ParseError string
 
 func (e ParseError) Error() string {

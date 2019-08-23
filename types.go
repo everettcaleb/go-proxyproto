@@ -13,29 +13,67 @@ const (
 	// 56 chars is the max len for TCP4 (minus 10)
 	v1Tcp4MaxSize = 56
 
+	// AddressFamilyLocal means the address type was specified as "unspec" (v1) or "local" (v2)
 	AddressFamilyLocal AddressFamily = 0
-	AddressFamilyIPv4  AddressFamily = 1
-	AddressFamilyIPv6  AddressFamily = 2
-	AddressFamilyUnix  AddressFamily = 3
+	// AddressFamilyIPv4 means the address type is IPv4
+	AddressFamilyIPv4 AddressFamily = 1
+	// AddressFamilyIPv6 means the address type is IPv6
+	AddressFamilyIPv6 AddressFamily = 2
+	// AddressFamilyUnix means the address type is a Unix socket address (v2 only)
+	AddressFamilyUnix AddressFamily = 3
 
+	// TransportUnspec means the transport was unspecified (v2 only)
 	TransportUnspec Transport = 0
+	// TransportStream means the transport is TCP (Stream) (v1 or v2)
 	TransportStream Transport = 1
-	TransportDgram  Transport = 2
+	// TransportDgram means the transport is UDP (Datagram) (v2 only)
+	TransportDgram Transport = 2
 
-	TLVTypeALPN          TLVType       = 0x1
-	TLVTypeAuthority     TLVType       = 0x2
-	TLVTypeCRC32C        TLVType       = 0x3
-	TLVTypeNoop          TLVType       = 0x4
-	TLVTypeSSL           TLVType       = 0x20
+	// TLVTypeALPN is for Application-Layer Protocol Negotiation (ALPN). It is a byte sequence defining
+	// the upper layer protocol in use over the connection. The most common use case
+	// will be to pass the exact copy of the ALPN extension of the Transport Layer
+	// Security (TLS) protocol as defined by RFC7301
+	TLVTypeALPN TLVType = 0x1
+	// TLVTypeAuthority contains the host name value passed by the client, as an UTF8-encoded string.
+	// In case of TLS being used on the client connection, this is the exact copy of
+	// the "server_name" extension as defined by RFC3546
+	TLVTypeAuthority TLVType = 0x2
+	// TLVTypeCRC32C is a 32-bit number storing the CRC32c checksum of the PROXY protocol header
+	TLVTypeCRC32C TLVType = 0x3
+	// TLVTypeNoop should be ignored when parsed. The value is zero or more bytes.
+	// Can be used for data padding or alignment
+	TLVTypeNoop TLVType = 0x4
+	// TLVTypeSSL indicates that the client connected over SSL/TLS and may contain sub-TLVs
+	TLVTypeSSL TLVType = 0x20
+	// TLVTypeNetNS defines the value as the US-ASCII string representation
+	// of the namespace's name.
+	TLVTypeNetNS TLVType = 0x30
+
+	// TLVSubTypeSSLVersion is the US-ASCII string representation of the TLS version
 	TLVSubTypeSSLVersion SSLTLVSubType = 0x21
-	TLVSubTypeSSLCN      SSLTLVSubType = 0x22
-	TLVSubTypeSSLCipher  SSLTLVSubType = 0x23
-	TLVSubTypeSSLSigAlg  SSLTLVSubType = 0x24
-	TLVSubTypeSSLKeyAlg  SSLTLVSubType = 0x25
-	TLVTypeNetNS         TLVType       = 0x30
+	// TLVSubTypeSSLCN is the string representation (in UTF8) of the Common Name field
+	// (OID: 2.5.4.3) of the client certificate's Distinguished Name
+	TLVSubTypeSSLCN SSLTLVSubType = 0x22
+	// TLVSubTypeSSLCipher provides the US-ASCII string name
+	// of the used cipher, for example "ECDHE-RSA-AES128-GCM-SHA256"
+	TLVSubTypeSSLCipher SSLTLVSubType = 0x23
+	// TLVSubTypeSSLSigAlg provides the US-ASCII string name
+	// of the algorithm used to sign the certificate presented by the frontend when
+	// the incoming connection was made over an SSL/TLS transport layer, for example
+	// "SHA256".
+	TLVSubTypeSSLSigAlg SSLTLVSubType = 0x24
+	// TLVSubTypeSSLKeyAlg provides the US-ASCII string name
+	// of the algorithm used to generate the key of the certificate presented by the
+	// frontend when the incoming connection was made over an SSL/TLS transport layer,
+	// for example "RSA2048".
+	TLVSubTypeSSLKeyAlg SSLTLVSubType = 0x25
 
-	TLVSSLClientSSL      SSLTLVClientField = 0x1
+	// TLVSSLClientSSL bit-flag indicates that the client connected over SSL/TLS
+	TLVSSLClientSSL SSLTLVClientField = 0x1
+	// TLVSSLClientCertConn bit-flag indicates that the client provided a certificate over the current connection
 	TLVSSLClientCertConn SSLTLVClientField = 0x2
+	// TLVSSLClientCertSess bit-flag indicates that the client provided a
+	// certificate at least once over the TLS session this connection belongs to.
 	TLVSSLClientCertSess SSLTLVClientField = 0x4
 )
 
@@ -90,11 +128,13 @@ type Transport int
 // TLVType is the "type" portion of type-length-value
 type TLVType byte
 
+// SSLTLVSubType is the "sub-type" port of the SSL type-length-value entry
 type SSLTLVSubType byte
 
+// SSLTLVClientField is a bit-field indicating what the client provided
 type SSLTLVClientField byte
 
-// Data represents the version independent data captured via Proxy Protocol
+// Data represents the version-independent data captured via Proxy Protocol
 type Data struct {
 	AddressFamily AddressFamily
 	Transport     Transport
@@ -172,12 +212,14 @@ func (a *dataAddr) String() string {
 	return ""
 }
 
+// SSLTLVData contains information about any client-presented TLS certificate
 type SSLTLVData struct {
 	Client   SSLTLVClientField
 	Verified bool
 	SubTLVs  map[SSLTLVSubType][]byte
 }
 
+// TLVSSLVersion the TLS version used, the second return value will be false if this is not present
 func (d *SSLTLVData) TLVSSLVersion() (string, bool) {
 	if d.SubTLVs == nil {
 		return "", false
@@ -188,6 +230,7 @@ func (d *SSLTLVData) TLVSSLVersion() (string, bool) {
 	return "", false
 }
 
+// TLVSSLCommonName the certificate common name presented, the second return value will be false if this is not present
 func (d *SSLTLVData) TLVSSLCommonName() (string, bool) {
 	if d.SubTLVs == nil {
 		return "", false
@@ -198,6 +241,7 @@ func (d *SSLTLVData) TLVSSLCommonName() (string, bool) {
 	return "", false
 }
 
+// TLVSSLCipher the TLS cipher used, the second return value will be false if this is not present
 func (d *SSLTLVData) TLVSSLCipher() (string, bool) {
 	if d.SubTLVs == nil {
 		return "", false
@@ -208,6 +252,7 @@ func (d *SSLTLVData) TLVSSLCipher() (string, bool) {
 	return "", false
 }
 
+// TLVSSLSigAlg the TLS signature algo used, the second return value will be false if this is not present
 func (d *SSLTLVData) TLVSSLSigAlg() (string, bool) {
 	if d.SubTLVs == nil {
 		return "", false
@@ -218,6 +263,7 @@ func (d *SSLTLVData) TLVSSLSigAlg() (string, bool) {
 	return "", false
 }
 
+// TLVSSLKeyAlg the TLS key algo used, the second return value will be false if this is not present
 func (d *SSLTLVData) TLVSSLKeyAlg() (string, bool) {
 	if d.SubTLVs == nil {
 		return "", false

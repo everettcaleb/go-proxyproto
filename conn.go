@@ -5,13 +5,18 @@ import (
 	"time"
 )
 
+// Conn is an implementation of net.Conn that provides Proxy Protocol v1/v2 support
+// The main feature is you can grab proxy information from Conn.ProxyData(). The expected usage is
+// that you call WrapConn to wrap this around an existing connection. This is already done in
+// Listener.Accept() if you're able to wrap an existing listener. See also, Listen, ListenTLS,
+// ListenAndServeHTTP, and ListenAndServeHTTPS which are likely more convenient to use.
 type Conn struct {
 	conn      net.Conn
 	protoData *Data
 }
 
 // WrapConn wraps the specified network connection in Proxy Protocol parsing logic.
-// The first bytes read from the connection will be used to populate the proxy data.
+// The connection is immediately read to populate the proxy data.
 func WrapConn(conn net.Conn) (*Conn, error) {
 	d, err := Parse(conn)
 	if err != nil {
@@ -20,15 +25,14 @@ func WrapConn(conn net.Conn) (*Conn, error) {
 	return &Conn{conn: conn, protoData: d}, nil
 }
 
-// ProxyData retrieves proxy data cached after initial read, may be nil if Read() hasn't
-// been called.
+// ProxyData retrieves proxy protocol data for this connection
 func (c *Conn) ProxyData() *Data {
 	return c.protoData
 }
 
-// Read reads data from the connection. Initial read uses an internal buffer
-// and will be parsed as Proxy Protocol v1 or v2. Subsequent reads will read
-// directly from the connection once parsing completes and the internal buffer is empty.
+// Read reads data from the connection. Initial read use an internal buffer
+// that was populated while parsing Proxy Protocol v1 or v2. Subsequent reads will read
+// directly from the connection once the internal buffer is empty.
 // Read can be made to time out and return an Error with Timeout() == true
 // after a fixed time limit; see SetDeadline and SetReadDeadline.
 func (c *Conn) Read(b []byte) (int, error) {
@@ -70,7 +74,8 @@ func (c *Conn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
-// RemoteAddr returns the remote network address.
+// RemoteAddr returns the remote network address. This will return the proxy-reported
+// source address/port that can also be retrieved from Conn.ProxyData().Source()
 func (c *Conn) RemoteAddr() net.Addr {
 	if c.protoData == nil {
 		return c.conn.RemoteAddr()

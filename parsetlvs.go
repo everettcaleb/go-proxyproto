@@ -22,6 +22,12 @@ func parseTLVs(buf []byte) map[TLVType][]byte {
 	return m
 }
 
+// TLVGetALPN gets the ALPN TLV from the data.
+// It is for Application-Layer Protocol Negotiation (ALPN). It is a byte sequence defining
+// the upper layer protocol in use over the connection. The most common use case
+// will be to pass the exact copy of the ALPN extension of the Transport Layer
+// Security (TLS) protocol as defined by RFC7301.
+// The second return value will be false if the TLV is not provided
 func (d *Data) TLVGetALPN() (string, bool) {
 	if d.TLVs == nil {
 		return "", false
@@ -32,6 +38,10 @@ func (d *Data) TLVGetALPN() (string, bool) {
 	return "", false
 }
 
+// TLVGetAuthority gets the host name value passed by the client, as an UTF8-encoded string.
+// In case of TLS being used on the client connection, this is the exact copy of
+// the "server_name" extension as defined by RFC3546
+// The second return value will be false if the TLV is not provided
 func (d *Data) TLVGetAuthority() (string, bool) {
 	if d.TLVs == nil {
 		return "", false
@@ -42,6 +52,8 @@ func (d *Data) TLVGetAuthority() (string, bool) {
 	return "", false
 }
 
+// TLVGetCRC32Checksum gets a 32-bit number storing the CRC32c checksum of the PROXY protocol header
+// The second return value will be false if the TLV is not provided
 func (d *Data) TLVGetCRC32Checksum() (uint32, bool) {
 	if d.TLVs == nil {
 		return 0, false
@@ -52,6 +64,8 @@ func (d *Data) TLVGetCRC32Checksum() (uint32, bool) {
 	return 0, false
 }
 
+// TLVGetSSL gets the SSL TLV
+// The second return value will be false if the TLV is not provided
 func (d *Data) TLVGetSSL() (*SSLTLVData, bool) {
 	if d.TLVs == nil {
 		return nil, false
@@ -72,6 +86,9 @@ func (d *Data) TLVGetSSL() (*SSLTLVData, bool) {
 	return nil, false
 }
 
+// TLVGetNetworkNamespace gets the value as the US-ASCII string representation
+// of the namespace's name.
+// The second return value will be false if the TLV is not provided
 func (d *Data) TLVGetNetworkNamespace() (string, bool) {
 	if d.TLVs == nil {
 		return "", false
