@@ -42,3 +42,4 @@ The helpers available are:
 - Add tests for Conn_Read
 - Add code to automatically validate CRC32C TLV if present
 - Add code to allow getting connection/proxy data from http.Request (not currently possible)
+- Add code for generating Proxy Protocol v1/v2 payloads so library can be used to implement a reverse proxy
